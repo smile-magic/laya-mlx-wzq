@@ -1,0 +1,26 @@
+# Local Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Model weights, caches and generated game/test artifacts
+models/
+.hf-cache/
+*.safetensors
+*.pt
+*.pth
+artifacts/
+test-results/
+*.log
+
+# Local-only configuration and agent memory
+.nmem/
+.env
+.env.*
+!.env.example
+.DS_Store

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ee"><title>一着 · 与 Laya 下五子棋</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23eee3cd'/%3E%3Ccircle cx='24' cy='25' r='13' fill='%23232625'/%3E%3Ccircle cx='41' cy='42' r='13' fill='%23fffdf8'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="一着 首页"><span class="brand-mark"><i></i><i></i></span><span>一着<span class="brand-en">YIZHAO</span></span></a>
+      <div class="connection"><span id="connectionDot" class="dot"></span><span id="connectionText">连接本地模型</span><span class="divider"></span><span>LOCAL AI</span></div>
+    </header>
+    <main>
+      <section class="intro"><div><div class="eyebrow">HUMAN × LOCAL INTELLIGENCE</div><h1>落子之间，见招拆招。</h1><p>与运行在你 Mac 上的 Laya，下一局五子棋。</p></div><div class="rule-chip">十五路棋盘<span>自由五子棋 · 连五即胜</span></div></section>
+      <div class="game-layout">
+        <section class="board-panel" aria-label="对弈区">
+          <div class="players"><div class="player"><span class="stone black"></span><div><strong>你</strong><span>执黑 · 先手</span></div><span id="yourTurn" class="turn-tag">待就绪</span></div><span class="versus">VS</span><div class="player ai-player"><span id="aiTurn" class="turn-tag hidden">思考中</span><div><strong>Laya</strong><span>执白 · 本地 AI</span></div><span class="stone white"></span></div></div>
+          <div class="board-wrap"><canvas id="board" tabindex="0" role="application" aria-label="15 乘 15 五子棋棋盘。方向键移动，回车或空格落子。你执黑先手。" aria-describedby="keyboardHint"></canvas></div>
+          <div class="board-footer"><div class="status"><span id="statusDot" class="dot"></span><span id="status" role="status" aria-live="polite">正在连接模型…</span></div><label class="toggle"><input type="checkbox" id="numbers"><span>显示手数</span></label></div>
+          <p id="keyboardHint" class="keyboard-hint">点击交叉点落子，也可用方向键移动、回车落子。<span id="focusPosition"></span></p>
+        </section>
+        <aside class="sidebar" aria-label="对局信息">
+          <section class="insight-card"><div class="card-heading"><div class="eyebrow">LIVE DECISION</div><span class="tiny-badge">MLX</span></div><h2>看见 AI 的这一手</h2><p class="card-description">从局面特征，到一个真实的模型选择。</p>
+            <div class="decision-summary"><div><span class="metric-label">落点</span><strong id="lastMove">—</strong></div><div><span class="metric-label">推理耗时</span><strong id="latency">—<small> ms</small></strong></div><div><span class="metric-label">总手数</span><strong id="moveCount">00</strong></div></div>
+            <div id="thinking" class="thinking hidden"><span></span><span></span><span></span><p>Laya 正在评估候选落点</p></div>
+            <div id="candidateEmpty" class="candidate-empty"><span class="mini-grid">✳</span><strong>棋局，从你开始。</strong><p>在棋盘落下第一颗黑子，<br>这里会出现 Laya 的候选落点。</p></div>
+            <div id="candidates" class="candidates"></div>
+            <div id="decisionNote" class="decision-note hidden"></div>
+            <p class="probability-note">百分比表示模型对候选点的选择倾向，并非胜率。</p>
+          </section>
+          <section class="controls-card"><button id="newGame" class="primary-button" disabled><span>＋</span> 新的一局</button><button id="undo" class="secondary-button" disabled><span>↶</span> 悔棋一回合</button><button id="retry" class="retry-button hidden">重新请求 AI 落子</button><p id="error" class="error hidden" role="alert"></p></section>
+          <section class="about-card"><div class="about-icon">◈</div><div><h3>模型选择，规则护航</h3><p>规则分析棋形，Laya 选择候选点。必胜、必防时由战术规则约束。这个模型未专门训练五子棋。</p><details><summary>这局棋如何运行</summary><p>黑棋先行，横、竖、斜任一方向连续五颗或更多即胜，不设禁手。每次 AI 落子都会调用本地多语言模型；若战术规则更改首选，这里会明确标出。悔棋撤销最近一轮，刷新页面会重置棋局。</p></details></div></section>
+        </aside>
+      </div>
+    </main>
+    <footer class="page-footer"><span>一着一思量。</span><span>Laya Multilingual · 322M · FP16<span class="footer-dot"> / </span>无需云端 API</span></footer>
+  </div>
+  <dialog id="resetDialog"><form method="dialog"><div class="eyebrow">A FRESH START</div><h2>再开一局？</h2><p>当前棋局会清空，你仍然执黑先手。</p><div class="dialog-actions"><button value="cancel" class="secondary-button">继续这局</button><button value="reset" class="primary-button">重新开始</button></div></form></dialog>
+</body></html>
