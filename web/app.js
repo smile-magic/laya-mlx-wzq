@@ -94,7 +94,8 @@ function renderAnalysis() {
     const top=document.createElement("div");top.className="candidate-top";
     const name=document.createElement("span");name.className="candidate-name";name.textContent=option.label;
     const detail=document.createElement("span");detail.className="candidate-detail";
-    detail.textContent=option.label===analysis.executed?"本次落点":option.attack;
+    detail.textContent=option.label===analysis.executed?"本次落点":option.eligible===false?"战术 / 棋形排除":option.attack;
+    detail.title=option.tactic || option.attack;
     const percent=document.createElement("span");percent.className="candidate-percent";percent.textContent=`${(option.probability*100).toFixed(1)}%`;
     top.append(name,detail,percent);
     const bar=document.createElement("div");bar.className="bar";
@@ -103,7 +104,7 @@ function renderAnalysis() {
   }
   note.textContent=analysis.intervened
     ? `战术规则介入：模型首选 ${analysis.proposed} → 实际落点 ${analysis.executed}。${analysis.reason}。`
-    : `${analysis.reason} · 整步耗时 ${Math.round(analysis.total_ms)} ms`;
+    : `模型选择 ${analysis.proposed} · ${analysis.reason} · 整步耗时 ${Math.round(analysis.total_ms)} ms`;
 }
 
 function render() {

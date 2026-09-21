@@ -17,6 +17,42 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 
+def decision_prompt(board, moves, options):
+    """Full board plus compact, explicit candidate consequences, not a trace."""
+    strongest = max(1, max(x["score"] for x in options))
+    criteria = {}
+    for option in options:
+        if option["tier"] == 4:
+            description = "Win immediately."
+        elif option["tier"] == 3:
+            description = "Create two winning points; Black cannot block both."
+        elif option["tier"] == 0:
+            description = "Black can win immediately after this move."
+        elif option["tier"] == 1:
+            description = "Black can create two winning points after this move."
+        elif option["future_wins"]:
+            description = "Force Black to block one winning point."
+        else:
+            description = (f"No immediate losing reply detected. "
+                           f"Create {option['attack'].open_threes} open threes.")
+        quality = round(max(0, option["score"]) / strongest * 100)
+        eligibility = "Eligible" if option["eligible"] else "Avoid"
+        criteria[option["label"]] = f"{eligibility}. {description} Shape quality {quality}/100."
+    question = {"move": {"type": "choice",
+                         "instructions": "Choose White's best eligible Gomoku move. Prefer winning, then defense, then stronger shape.",
+                         "criteria": criteria}}
+    rows = "\n".join(f"{r + 1:02d} " + " ".join(".BW"[cell] for cell in row)
+                     for r, row in enumerate(board))
+    state = ("Freestyle Gomoku, 15x15. Five or more in a row wins. "
+             "You are WHITE (W), human is BLACK (B), dot means empty. "
+             "Candidate consequences and shape quality are computed by rules, not win probabilities. "
+             "A losing reply check is shallow, not a guarantee of long-term safety. "
+             f"Move count: {len(moves)}. Black last played "
+             f"{coordinate(moves[-1]['r'], moves[-1]['c'])}.\n"
+             "Columns A B C D E F G H I J K L M N O; rows 1 to 15:\n" + rows)
+    return state, question
+
+
 class Policy:
     def __init__(self, model):
         # Imported here so rules/tests remain usable without a GPU or MLX.
@@ -32,31 +68,12 @@ class Policy:
         if not moves or len(moves) % 2 != 1:
             raise ValueError("需要先由黑棋落子，再轮到白棋。")
         options = candidates(board)
-        criteria = {}
-        for option in options:
-            attack, defense = option["attack"], option["defense"]
-            if attack.win:
-                description = "WIN NOW. Complete five white stones. Best move."
-            elif defense.win:
-                description = "MUST BLOCK. Black wins next turn here."
-            else:
-                description = (f"Attack: {attack.winning_points} winning threats, "
-                               f"{attack.open_threes} open threes. "
-                               f"Block: {defense.winning_points} threats, {defense.open_threes} threes.")
-            criteria[option["label"]] = description
-        question = {"move": {"type": "choice",
-                             "instructions": "Choose white's best Gomoku move. Win now, otherwise block immediate loss, otherwise create threats.",
-                             "criteria": criteria}}
-        state = ("Freestyle Gomoku, 15x15. Five or more in a row wins. You are WHITE. "
-                 "Human is BLACK. Candidate features come from a local tactical analyzer. "
-                 "More winning threats is better; an open three can grow into a four. "
-                 f"Move count: {len(moves)}. Black last played "
-                 f"{coordinate(moves[-1]['r'], moves[-1]['c'])}.")
+        state, question = decision_prompt(board, moves, options)
         inference_started = time.perf_counter()
         result = self.agent.predict(state, question)
         inference_ms = (time.perf_counter() - inference_started) * 1000
         probabilities = result["answers"]["move"]["probabilities"]
-        if (set(probabilities) != set(criteria) or
+        if (set(probabilities) != set(question["move"]["criteria"]) or
                 any(not math.isfinite(p) or not 0 <= p <= 1 for p in probabilities.values()) or
                 sum(probabilities.values()) <= 0):
             raise RuntimeError("模型返回的候选概率无效。")
@@ -75,7 +92,8 @@ class Policy:
                 "input_tokens": result.get("usage", {}).get("input_tokens"),
                 "candidates": [{"label": x["label"], "r": x["r"], "c": x["c"],
                                 "probability": probabilities[x["label"]],
-                                "attack": x["attack"].summary, "defense": x["defense"].summary}
+                                "attack": x["attack"].summary, "defense": x["defense"].summary,
+                                "eligible": x["eligible"], "tactic": x["tactic"]}
                                for x in sorted(options, key=lambda x: probabilities[x["label"]], reverse=True)],
             },
         }

@@ -31,7 +31,7 @@
             <p class="probability-note">百分比表示模型对候选点的选择倾向，并非胜率。</p>
           </section>
           <section class="controls-card"><button id="newGame" class="primary-button" disabled><span>＋</span> 新的一局</button><button id="undo" class="secondary-button" disabled><span>↶</span> 悔棋一回合</button><button id="retry" class="retry-button hidden">重新请求 AI 落子</button><p id="error" class="error hidden" role="alert"></p></section>
-          <section class="about-card"><div class="about-icon">◈</div><div><h3>模型选择，规则护航</h3><p>规则分析棋形，Laya 选择候选点。必胜、必防时由战术规则约束。这个模型未专门训练五子棋。</p><details><summary>这局棋如何运行</summary><p>黑棋先行，横、竖、斜任一方向连续五颗或更多即胜，不设禁手。每次 AI 落子都会调用本地多语言模型；若战术规则更改首选，这里会明确标出。悔棋撤销最近一轮，刷新页面会重置棋局。</p></details></div></section>
+          <section class="about-card"><div class="about-icon">◈</div><div><h3>模型选择，规则护航</h3><p>规则检查连五、活四和对手应手，Laya 在战术与棋形筛选后的候选中选择。模型未专门训练五子棋。</p><details><summary>这局棋如何运行</summary><p>黑棋先行，横、竖、斜任一方向连续五颗或更多即胜，不设禁手。AI 每手都会调用模型；界面保留原始概率，并标出规则改变首选的情况。短程检查不保证长程棋力。悔棋撤销最近一轮，刷新页面会重置棋局。</p></details></div></section>
         </aside>
       </div>
     </main>

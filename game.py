@@ -124,6 +124,25 @@ def features(board, r, c, color):
     return Features(winning, threats, threes, potential)
 
 
+def threat_points(board, r, c, color):
+    """Immediate win and distinct future winning squares after a placement.
+
+    Only lines through the hypothetical stone can create new winning squares.
+    Existing threats elsewhere are combined by the caller. No board mutation.
+    """
+    wins, points = False, set()
+    for dr, dc in DIRECTIONS:
+        line = []
+        for offset in range(-4, 5):
+            nr, nc = r + offset * dr, c + offset * dc
+            cell = board[nr][nc] if inside(nr, nc) else 3
+            line.append(1 if cell == color else 0 if cell == 0 else 2)
+        line[4] = 1
+        wins |= any(line[start:start + 5] == [1] * 5 for start in range(5))
+        points.update((r + (i - 4) * dr, c + (i - 4) * dc) for i in _winning_cells(line))
+    return wins, points
+
+
 def candidates(board):
     occupied = [(r, c) for r in range(SIZE) for c in range(SIZE) if board[r][c]]
     nearby = set()
@@ -142,16 +161,74 @@ def candidates(board):
         score -= (abs(r - 7) + abs(c - 7)) * 0.1
         result.append({"r": r, "c": c, "label": coordinate(r, c),
                        "attack": attack, "defense": defense, "score": score})
-    # Immediate wins take priority over defense, even when several threats exist.
-    result.sort(key=lambda x: (x["attack"].win, x["defense"].win, x["score"]), reverse=True)
+    if not result:
+        return []
+    white_wins = {(x["r"], x["c"]) for x in result if x["attack"].win}
+    black_wins = {(x["r"], x["c"]) for x in result if x["defense"].win}
+    black_forks = {(x["r"], x["c"]) for x in result if x["defense"].winning_points >= 2}
+
+    # Inspect the entire neighborhood BEFORE the six-option model shortlist.
+    # Adding a white stone cannot create a new black win/fork, so only the
+    # original black threat locations need rechecking after each white move.
+    for option in result:
+        r, c = option["r"], option["c"]
+        _, created = threat_points(board, r, c, WHITE)
+        threats = (white_wins | created) - {(r, c)}
+        remaining_wins = black_wins - {(r, c)}
+        forks = 0
+        board[r][c] = WHITE
+        try:
+            if not option["attack"].win and not remaining_wins and len(threats) < 2:
+                # A single white winning square forces Black to occupy it.
+                # Other black fork moves would lose to White's immediate win.
+                replies = threats if threats else black_forks
+                for br, bc in replies:
+                    if board[br][bc]:
+                        continue
+                    _, points = threat_points(board, br, bc, BLACK)
+                    forks += len(points) >= 2
+        finally:
+            board[r][c] = 0
+
+        if option["attack"].win:
+            tier, tactic = 4, "直接连五"
+        elif remaining_wins:
+            tier, tactic = 0, "对手下一手可连五"
+        elif len(threats) >= 2:
+            tier, tactic = 3, "形成双重连五点"
+        elif forks:
+            tier, tactic = 1, "对手可制造双重连五点"
+        else:
+            tier, tactic = 2, "未检出短程败招"
+        option.update(tier=tier, tactic=tactic, opponent_wins=len(remaining_wins),
+                      opponent_forks=forks, future_wins=len(threats))
+
+    best_tier = max(x["tier"] for x in result)
+    best_score = max(x["score"] for x in result if x["tier"] == best_tier)
+    # Within ordinary positions, don't let a model preference discard a
+    # clearly stronger shape. This is explicitly a heuristic, not a proof.
+    threshold = best_score * .65 if best_tier == 2 and best_score > 0 else -float("inf")
+    if best_tier == 4:
+        reason = "完成连五"
+    elif best_tier == 3:
+        reason = "形成对手无法同时封堵的双重连五点"
+    elif best_tier < 2:
+        reason = "候选中未找到可解除全部短程威胁的走法"
+    elif black_wins:
+        reason = "拦截对方下一手连五"
+    elif black_forks:
+        reason = "提前防住对方活四或双重连五威胁"
+    else:
+        reason = "在短程检查通过、棋形评分相近的候选中选择"
+    for option in result:
+        option["eligible"] = option["tier"] == best_tier and option["score"] >= threshold
+        option["guard_reason"] = reason
+    result.sort(key=lambda x: (x["eligible"], x["tier"], x["score"]), reverse=True)
     return result[:6]
 
 
 def select_move(options, probabilities):
     proposed = max(options, key=lambda x: probabilities[x["label"]])
-    wins = [x for x in options if x["attack"].win]
-    blocks = [x for x in options if x["defense"].win]
-    allowed = wins or blocks or options
+    allowed = [x for x in options if x["eligible"]]
     executed = max(allowed, key=lambda x: probabilities[x["label"]])
-    reason = "完成连五" if wins else "拦截对方下一手连五" if blocks else "模型自主选择候选点"
-    return proposed, executed, reason
+    return proposed, executed, executed["guard_reason"]

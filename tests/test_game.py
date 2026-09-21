@@ -1,6 +1,7 @@
 import unittest
 
-from game import BLACK, WHITE, SIZE, candidates, features, replay, select_move, winning_line
+from game import BLACK, WHITE, SIZE, candidates, features, replay, select_move, threat_points, winning_line
+from scenarios import positions
 
 
 def empty():
@@ -46,6 +47,79 @@ class RulesTest(unittest.TestCase):
 
 
 class TacticsTest(unittest.TestCase):
+    def test_winning_points_match_independent_board_scan(self):
+        for _, symmetry, moves, _ in positions():
+            if symmetry != 0:
+                continue
+            board, _, _ = replay(moves)
+            for option in candidates(board):
+                r, c = option["r"], option["c"]
+                for color in (BLACK, WHITE):
+                    win, expected = threat_points(board, r, c, color)
+                    board[r][c] = color
+                    self.assertEqual(win, bool(winning_line(board, r, c)))
+                    if not win:
+                        actual = set()
+                        for nr in range(SIZE):
+                            for nc in range(SIZE):
+                                if board[nr][nc]:
+                                    continue
+                                board[nr][nc] = color
+                                if (r, c) in winning_line(board, nr, nc):
+                                    actual.add((nr, nc))
+                                board[nr][nc] = 0
+                        self.assertEqual(expected, actual)
+                    board[r][c] = 0
+
+    def test_opponent_immediate_win_overrides_own_future_fork(self):
+        board = empty()
+        board[7][3] = WHITE
+        for c in range(4, 8):
+            board[7][c] = BLACK
+        for c in range(5, 8):
+            board[10][c] = WHITE
+        options = candidates(board)
+        eligible = {(x["r"], x["c"]) for x in options if x["eligible"]}
+        self.assertEqual(eligible, {(7, 8)})
+
+    def test_forced_opponent_block_can_itself_create_a_fork(self):
+        board = empty()
+        for c in (4, 5, 6):
+            board[7][c] = WHITE
+        for r in (4, 5, 6):
+            board[r][7] = BLACK
+        options = candidates(board)
+        # White I8 threatens H8, but Black's mandatory H8 creates a vertical
+        # open four. This is a losing attack, despite forcing a response.
+        trap = next(x for x in options if (x["r"], x["c"]) == (7, 8))
+        self.assertEqual(trap["opponent_forks"], 1)
+        self.assertFalse(trap["eligible"])
+
+    def test_strong_shape_cannot_be_discarded_for_passive_move(self):
+        board = empty()
+        board[7][6] = board[7][7] = WHITE
+        board[0][0] = BLACK
+        options = candidates(board)
+        best = max(x["score"] for x in options if x["tier"] == 2)
+        self.assertTrue(all(x["score"] >= best * .65 for x in options if x["eligible"]))
+        self.assertTrue(all(x["attack"].open_threes for x in options if x["eligible"]))
+
+    def test_diagnostic_positions_reject_bad_model_preferences(self):
+        for name, symmetry, moves, expected in positions():
+            with self.subTest(case=name, symmetry=symmetry):
+                board, winner, _ = replay(moves)
+                self.assertIsNone(winner)
+                options = candidates(board)
+                self.assertTrue(expected.intersection((x["r"], x["c"]) for x in options))
+                # Give every inferior candidate the strongest possible model preference.
+                for bad in options:
+                    if (bad["r"], bad["c"]) in expected:
+                        continue
+                    probabilities = {x["label"]: .001 for x in options}
+                    probabilities[bad["label"]] = .99
+                    _, executed, _ = select_move(options, probabilities)
+                    self.assertIn((executed["r"], executed["c"]), expected)
+
     def test_immediate_win_and_broken_four(self):
         board = empty()
         for c in (4, 5, 7, 8):
